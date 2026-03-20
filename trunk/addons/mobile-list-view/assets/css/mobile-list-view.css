@@ -1,0 +1,39 @@
+.bookacti-booking-system .fc-list-table .fc-list-event-time {
+	font-weight: 600;
+	min-width: 84px;
+}
+
+.bookacti-booking-system .fc-list-day-cushion {
+	font-weight: 700;
+}
+
+@media (max-width: 768px) {
+	.bookacti-booking-system.bookacti-mobile-list-view .fc .fc-toolbar {
+		align-items: flex-start;
+		gap: 10px;
+	}
+
+	.bookacti-booking-system.bookacti-mobile-list-view .fc .fc-toolbar-title {
+		font-size: 1.1em;
+	}
+
+	.bookacti-booking-system.bookacti-mobile-list-view .fc .fc-toolbar-chunk {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+
+	.bookacti-booking-system.bookacti-mobile-list-view .fc .fc-button {
+		padding: 0.35em 0.55em;
+	}
+
+	.bookacti-booking-system.bookacti-mobile-list-view .fc-list-day-cushion,
+	.bookacti-booking-system.bookacti-mobile-list-view .fc-list-table td {
+		padding: 10px 12px;
+	}
+
+	.bookacti-booking-system.bookacti-mobile-list-view .fc-list-event-title {
+		font-size: 0.95rem;
+		line-height: 1.3;
+	}
+}
