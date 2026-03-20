@@ -1,0 +1,368 @@
+// INITIALIZATION
+
+/**
+ * Choose a group of events dialog
+ * @version 1.17.0
+ * @param {HTMLElement} booking_system
+ * @param {Object} groups
+ * @param {(FullCalendar.EventApi|Object)} event
+ */
+function bookacti_dialog_choose_group_of_events( booking_system, groups, event ) {
+	var booking_system_id     = booking_system.attr( 'id' );
+	var dialog                = $j( '#' + booking_system_id + '-choose-group-of-events-dialog' );
+	var groups_of_events_list = $j( '#' + booking_system_id + '-groups-of-events-list' );
+
+	var attributes        = bookacti.booking_system[ booking_system_id ];
+	var multiple_bookings = attributes[ 'multiple_bookings' ];
+	var bookings_only     = attributes[ 'bookings_only' ];
+	var event_id          = typeof event.groupId !== 'undefined' ? parseInt( event.groupId ) : parseInt( event.id );
+		
+	groups_of_events_list.data( 'booking-system-id', booking_system_id );
+
+	groups_of_events_list.empty();
+
+	// Fill the dialog with the different choices
+	
+	// Add single event option if allowed
+	if( attributes[ 'groups_single_events' ] ) {
+		// Check event availability
+		var availability = bookacti_get_event_availability( booking_system, event );
+		var is_available = bookacti_is_event_available( booking_system, event );
+
+		var container = $j( '<div></div>', {});
+		var option_container = $j( '<div></div>', {
+			'id': 'bookacti-group-of-events-option-single',
+			'class': 'bookacti-group-of-events-option',
+			'data-group-id': 0,
+			'data-group-date': '',
+			'data-show-events': 0
+		});
+		var radio = $j( '<input />', {
+			'id': 'bookacti-group-of-events-single',
+			'type': 'radio',
+			'name': 'group_of_events',
+			'value': 'single',
+			'disabled': ! bookings_only && ! is_available
+		});
+		
+		// Show availability or bookings
+		var bookings_number  = bookacti_get_bookings_number_for_a_single_grouped_event( booking_system, event, groups );
+		var available_places = ! is_available && availability > 0 && bookacti_localized.not_bookable !== '{current}' ? 0 : availability;
+		
+		// Maybe hide availability
+		var hide_availability_class = '';
+		var total_availability = bookacti.booking_system[ booking_system_id ][ 'events_data' ]?.[ event_id ]?.[ 'availability' ];
+		if( ! total_availability ) { total_availability = 0; }
+		var percent_remaining = total_availability ? parseInt( ( availability / total_availability ) * 100 ) : 0;
+		var percent_threshold = parseInt( bookacti.booking_system[ booking_system_id ][ 'hide_availability' ] );
+		var fixed_threshold   = parseInt( bookacti_localized.hide_availability_fixed );
+		var hide_percent      = percent_threshold < 100 && percent_remaining > percent_threshold;
+		var hide_fixed        = fixed_threshold > 0 && availability > fixed_threshold;
+
+		if( ! bookings_only ) {
+			if( ( fixed_threshold <= 0 && hide_percent ) || ( percent_threshold >= 100 && hide_fixed ) || ( hide_percent && hide_fixed ) ) {
+				available_places        = '';
+				hide_availability_class = 'bookacti-hide-availability';
+			}
+		}
+		
+		// Add CSS class according to the number of bookings and the availability
+		var availability_classes = '';
+		availability_classes += bookings_number > 0 ? ' bookacti-booked' : ' bookacti-not-booked';
+		availability_classes += availability <= 0 ? ' bookacti-full' : '';
+		availability_classes += ! is_available && availability > 0 ? ' bookacti-not-bookable' : '';
+
+		var avail_div  = $j( '<div></div>', { 'class': 'bookacti-group-availability-container ' + hide_availability_class } );
+		var places_div = $j( '<div></div>', { 'class': 'bookacti-available-places ' + availability_classes } );
+		
+		if( bookings_only ) {
+			var bookings_particle = bookings_number === 1 ? bookacti_localized.booking : bookacti_localized.bookings;
+			
+			var nb_span       = $j( '<span></span>', { 'class': 'bookacti-active-bookings-number', 'html': bookings_number } );
+			var particle_span = $j( '<span></span>', { 'class': 'bookacti-available-places-avail-particle', 'html': bookings_particle } );
+
+			places_div.append( nb_span );
+			places_div.append( particle_span );
+			avail_div.append( places_div );
+
+		} else {
+			var avail_particle = availability === 1 ? bookacti_localized.avail : bookacti_localized.avails;
+			if( ! is_available && availability > 0 && bookacti_localized.not_bookable && bookacti_localized.not_bookable !== '{current}' ) {
+				available_places = '';
+				avail_particle   = bookacti_localized.not_bookable;
+			}
+			
+			var nb_span       = $j( '<span></span>', { 'class': 'bookacti-available-places-number', 'html': available_places } );
+			var particle_span = $j( '<span></span>', { 'class': 'bookacti-available-places-avail-particle', 'html': avail_particle } );
+
+			places_div.append( nb_span );
+			places_div.append( particle_span );
+			avail_div.append( places_div );
+
+		}
+		
+		// Build group option label
+		var title_span = $j( '<span></span>', {
+			'html': bookacti_localized.single_event,
+			'class': 'bookacti-group-of-events-option-title'
+		});
+
+		var label = $j( '<label></label>', {
+			'html': title_span[0].outerHTML + avail_div[0].outerHTML,
+			'for': 'bookacti-group-of-events-single'
+		});
+
+		var event_list = $j( '<ul></ul>', {
+			'id': 'bookacti-group-of-events-list-single',
+			'class': 'bookacti-group-of-events-list bookacti-custom-scrollbar',
+			'data-group-id': 0,
+			'data-group-date': ''
+		});
+
+		var event_duration = bookacti_format_event_duration( event.start, event.end );
+		
+		var list_element = $j( '<li></li>', {
+			'html': '<span class="bookacti-booking-event-duration" >'  + event_duration + '</span>' 
+			+ '<span class="bookacti-booking-event-title-separator" > - </span>' 
+			+ '<span class="bookacti-booking-event-title" >'  + ( typeof event.title !== 'undefined' ? event.title : '' ) + '</span>' 
+		});
+
+		option_container.append( radio );
+		option_container.append( label );
+		container.append( option_container );
+
+		event_list.append( list_element );
+		container.append( event_list );
+		
+		booking_system.trigger( 'bookacti_group_of_events_option', [ container, 0, '', event, is_available ] );
+		
+		groups_of_events_list.append( container );
+	}
+
+	// Add each available group of events as a radio option
+	$j.each( groups, function( group_id, groups_per_date ) {
+		if( typeof attributes[ 'groups_data' ][ group_id ] === 'undefined' ) { return true; } // Skip
+		
+		$j.each( groups_per_date, function( group_date, group_events ) {
+			// Get group bookings data
+			var group_availability, group_bookings, total_availability;
+			group_availability = 0; group_bookings = 0; total_availability = 0;
+			if( typeof attributes[ 'groups_bookings' ][ group_id ] !== 'undefined' ) {
+				if( typeof attributes[ 'groups_bookings' ][ group_id ][ group_date ] !== 'undefined' ) {
+					group_availability = attributes[ 'groups_bookings' ][ group_id ][ group_date ]?.[ 'availability' ];
+					group_bookings     = attributes[ 'groups_bookings' ][ group_id ][ group_date ]?.[ 'quantity' ];
+					total_availability = attributes[ 'groups_bookings' ][ group_id ][ group_date ]?.[ 'total_availability' ];
+				}
+			}
+			
+			var is_available = bookacti_is_group_of_events_available( booking_system, group_id, group_date );
+
+			var container = $j( '<div></div>', {} );
+			var option_container = $j( '<div></div>', {
+				'id': 'bookacti-group-of-events-option-' + group_id + '_' + group_date,
+				'class': 'bookacti-group-of-events-option' + ( ! bookings_only && ! is_available ? ' bookacti-group-of-events-unavailable' : '' ),
+				'data-group-id': group_id,
+				'data-group-date': group_date,
+				'data-show-events': 0
+			});
+			var radio = $j( '<input />', {
+				'id': 'bookacti-group-of-events-' + group_id + '_' + group_date,
+				'type': 'radio',
+				'name': 'group_of_events',
+				'disabled': ! bookings_only && ! is_available,
+				'value': group_id + '_' + group_date
+			});
+
+			// Show availability or bookings
+			var available_places = ! is_available && group_availability > 0 && bookacti_localized.not_bookable !== '{current}' ? 0 : group_availability;
+			var bookings_number  = group_bookings;
+			
+			// Maybe hide availability
+			var hide_availability_class = '';
+			var percent_remaining = total_availability ? parseInt( ( group_availability / total_availability ) * 100 ) : 0;
+			var percent_threshold = parseInt( bookacti.booking_system[ booking_system_id ][ 'hide_availability' ] );
+			var fixed_threshold   = parseInt( bookacti_localized.hide_availability_fixed );
+			var hide_percent      = percent_threshold < 100 && percent_remaining > percent_threshold;
+			var hide_fixed        = fixed_threshold > 0 && group_availability > fixed_threshold;
+
+			if( ! bookings_only ) {
+				if( ( fixed_threshold <= 0 && hide_percent ) || ( percent_threshold >= 100 && hide_fixed ) || ( hide_percent && hide_fixed ) ) {
+					available_places        = '';
+					hide_availability_class = 'bookacti-hide-availability';
+				}
+			}
+			
+			// Add CSS class according to the number of bookings and the availability
+			var availability_classes = '';
+			availability_classes += group_bookings > 0 ? ' bookacti-booked' : ' bookacti-not-booked';
+			availability_classes += group_availability <= 0 ? ' bookacti-full' : '';
+			availability_classes += ! is_available && group_availability > 0 ? ' bookacti-not-bookable' : '';
+			
+			var avail_div  = $j( '<div></div>', { 'class': 'bookacti-group-availability-container ' + hide_availability_class } );
+			var places_div = $j( '<div></div>', { 'class': 'bookacti-available-places ' + availability_classes } );
+			
+			if( bookings_only ) {
+				var bookings_particle = group_bookings === 1 ? bookacti_localized.booking : bookacti_localized.bookings;
+
+				var nb_span       = $j( '<span></span>', { 'class': 'bookacti-active-bookings-number', 'html': bookings_number } );
+				var particle_span = $j( '<span></span>', { 'class': 'bookacti-available-places-avail-particle', 'html': bookings_particle } );
+
+				places_div.append( nb_span );
+				places_div.append( particle_span );
+				avail_div.append( places_div );
+
+			} else {
+				var avail_particle = group_availability === 1 ? bookacti_localized.avail : bookacti_localized.avails;
+				if( ! is_available && group_availability > 0 && bookacti_localized.not_bookable && bookacti_localized.not_bookable !== '{current}' ) {
+					available_places = '';
+					avail_particle   = bookacti_localized.not_bookable;
+				}
+
+				var nb_span       = $j( '<span></span>', { 'class': 'bookacti-available-places-number', 'html': available_places } );
+				var particle_span = $j( '<span></span>', { 'class': 'bookacti-available-places-avail-particle', 'html': avail_particle } );
+
+				places_div.append( nb_span );
+				places_div.append( particle_span );
+				avail_div.append( places_div );
+
+			}
+			
+			// Build group option label
+			var title_span = $j( '<span></span>', {
+				'html': attributes[ 'groups_data' ][ group_id ][ 'title' ],
+				'class': 'bookacti-group-of-events-option-title'
+			});
+			
+			var label = $j( '<label></label>', {
+				'html': title_span[0].outerHTML + avail_div[0].outerHTML,
+				'for': 'bookacti-group-of-events-' + group_id + '_' + group_date
+			});
+
+			// Build the group events list
+			var event_list = $j( '<ul></ul>', {
+				'id': 'bookacti-group-of-events-list-' + group_id + '_' + group_date,
+				'class': 'bookacti-group-of-events-list bookacti-custom-scrollbar',
+				'data-group-id': group_id,
+				'data-group-date': group_date
+			});
+
+			// Add events of the group to the list
+			$j.each( group_events, function( i, group_event ) {
+				var start_and_end_same_day = group_event.start.substr( 0, 10 ) === group_event.end.substr( 0, 10 );
+				var group_event_start      = moment.utc( group_event.start ).locale( bookacti_localized.current_lang_code );
+				var group_event_end        = moment.utc( group_event.end ).locale( bookacti_localized.current_lang_code );
+
+				var group_event_duration = group_event_start.formatPHP( bookacti_localized.date_format ) + bookacti_localized.dates_separator + group_event_end.formatPHP( bookacti_localized.date_format );
+				if( start_and_end_same_day ) {
+					group_event_duration = group_event_start.formatPHP( bookacti_localized.date_format ) + bookacti_localized.date_time_separator + group_event_end.formatPHP( bookacti_localized.time_format );
+				}
+
+				var list_element = $j( '<li></li>', {
+					'html': '<span class="bookacti-booking-event-duration" >'  + group_event_duration + '</span>' 
+					+ '<span class="bookacti-booking-event-title-separator" > - </span>'  
+					+ '<span class="bookacti-booking-event-title" >'  + group_event.title + '</span>'
+				});
+
+				event_list.append( list_element );
+			});
+			
+			option_container.append( radio );
+			option_container.append( label );
+			container.append( option_container );
+			container.append( event_list );
+			
+			booking_system.trigger( 'bookacti_group_of_events_option', [ container, group_id, group_date, event, is_available ] );
+			
+			groups_of_events_list.append( container );
+		});
+	});
+
+	// Trigger a preview of the selection on change
+	groups_of_events_list.find( 'input[name="group_of_events"]' ).on( 'change', function() {
+		var group_val   = $j( this ).val();
+		var group_id    = group_val !== 'single' ? parseInt( group_val.substr( 0, group_val.indexOf( '_' ) ) ) : 0;
+		var group_date  = group_val !== 'single' ? group_val.substr( group_val.indexOf( '_' ) + 1 ) : '';
+		var groups_list = $j( '#' + booking_system_id + '-choose-group-of-events-dialog .bookacti-groups-of-events-list' );
+
+		// Hide other events list
+		groups_list.find( '.bookacti-group-of-events-option:not(#bookacti-group-of-events-option-' + group_val + ')' ).data( 'show-events', 0 ).attr( 'data-show-events', 0 );
+		groups_list.find( '.bookacti-group-of-events-list:not(#bookacti-group-of-events-list-' + group_val + ')' ).hide( 200 );
+
+		// Show group events list
+		groups_list.find( '#bookacti-group-of-events-option-' + group_val ).data( 'show-events', 1 ).attr( 'data-show-events', 1 );
+		groups_list.find( '#bookacti-group-of-events-list-' + group_val ).show( 200 );
+
+		// Don't preview the group of events if it is not available
+		var trigger = { 'click': true };
+		if( $j( this ).is( ':disabled' ) ) { trigger.click = false; }
+
+		// Allow plugins to prevent the group of event preview
+		booking_system.trigger( 'bookacti_trigger_group_of_events_preview', [ trigger, group_id, group_date, event ] );
+
+		if( trigger.click ) {
+			// If the event is picked, just unpick it (or its group)
+			if( multiple_bookings ) { bookacti_unpick_events( booking_system, event ); }
+			// Pick events and fill form inputs
+			else { bookacti_unpick_all_events( booking_system ); }
+			bookacti_pick_events( booking_system, event, group_id, group_date );
+
+			booking_system.trigger( 'bookacti_group_of_events_preview', [ group_id, group_date, event ] ); 
+		}
+	});
+
+	// Pick the first group by default and trigger the change
+	groups_of_events_list.find( 'input[name="group_of_events"]:not([disabled]):first' ).prop( 'checked', true ).trigger( 'change' );
+	
+	// TEMP FIX: https://github.com/fullcalendar/fullcalendar/issues/5631
+	booking_system.find( '.fc-toolbar button:focus' ).blur();
+	
+	// Make sure picked_events is emptied on close if no option has been selected
+	dialog.dialog({
+		"beforeClose": function(){},
+		"close": function() {
+			var selected_group = groups_of_events_list.find( 'input[type="radio"]:checked' ).val();
+			// Empty the picked events if no group was choosen
+			if( typeof selected_group === 'undefined' && ! multiple_bookings ) {
+				bookacti_unpick_all_events( booking_system );
+			}
+		}
+	});
+
+	// Add the 'OK' button
+	dialog.dialog( 'option', 'buttons',
+		[{
+			text: bookacti_localized.dialog_button_ok,
+			click: function() {
+				var group_val = groups_of_events_list.find( 'input[type="radio"]:checked' ).val();
+
+				if( typeof group_val !== 'undefined' ) {
+					// Don't select the group of events if it is not available
+					var trigger = { 'click': true };
+					if( groups_of_events_list.find( 'input[type="radio"]:checked' ).is( ':disabled' ) ) { trigger.click = false; }
+					
+					var group_id   = group_val !== 'single' ? parseInt( group_val.substr( 0, group_val.indexOf( '_' ) ) ) : 0;
+					var group_date = group_val !== 'single' ? group_val.substr( group_val.indexOf( '_' ) + 1 ) : '';
+					
+					// Allow plugins to prevent the group of events selection
+					booking_system.trigger( 'bookacti_trigger_group_of_events_click', [ trigger, group_id, group_date, event ] );
+
+					if( trigger.click ) {
+						// If the event is picked, just unpick it (or its group)
+						if( multiple_bookings ) { bookacti_unpick_events( booking_system, event ); }
+						// Pick events and fill form inputs
+						else { bookacti_unpick_all_events( booking_system ); }
+						bookacti_pick_events( booking_system, event, group_id, group_date );
+
+						booking_system.trigger( 'bookacti_group_of_events_chosen', [ group_id, group_date, event ] );
+					}
+				}
+
+				// Close the modal dialog
+				$j( this ).dialog( 'close' );
+			}
+		}]
+	);
+
+	// Open the modal dialog
+	dialog.dialog( 'open' );
+}
